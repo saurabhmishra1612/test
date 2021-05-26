@@ -1,0 +1,141 @@
+--Table Name : Doctor
+create table Doctor
+(
+DoctorID int primary key identity(1001,1),
+DoctorName varchar(25) not null
+)
+--Insert into Doctor
+insert into Doctor values('Susan')
+select * from Doctor
+--Table Name : Specialization
+Create table Specialization
+(
+SpecializationCode char(3) primary key,
+SpecializationName varchar(20) not null
+)
+--Insert into Specialization
+insert into Specialization values('GYN','Gynecologiest')
+insert into Specialization values('CAR','Cardiologiest')
+insert into Specialization values('ANE','Anesthesiologiest')
+select * from Specialization
+--Table Name : DoctorSpecialization
+create table DoctorSpecialization
+(
+DoctorId int constraint fk_DoctorId references Doctor(DoctorId),
+SpecializationCode char(3) constraint fk_SpecializationCode references
+Specialization(SpecializationCode),
+SpecializationDate date not null,
+constraint pk_DoctorSpeId primary key(DoctorId,SpecializationCode)
+)
+--Insert into DoctorSpecialization
+insert into DoctorSpecialization values(1001,'ANE','2010-01-01')
+insert into DoctorSpecialization values(1002,'CAR','2010-01-01')
+insert into DoctorSpecialization values(1003,'CAR','2010-01-01')
+select * from DoctorSpecialization
+--Table Name : Surgery
+create table Surgery
+(
+SurgeryId int Primary key identity(5000,1),
+DoctorId int constraint fk_DctorId references Doctor(DoctorID),
+SurgeryDate date not null,
+StartTime decimal(4,2) not null,
+EndTime decimal(4,2) not null,
+SurgeryCategory char(3) constraint fk_SurgeryCategory references
+Specialization(SpecializationCode)
+)
+--Insert into Surgery
+insert into Surgery values(1001,'2011-01-01',09.00,14.00,'ANE')
+insert into Surgery values(1002,'2015-01-01',10.00,16.00,'CAR')
+select * from Surgery
+--1)Procedure 1 Answer
+alter procedure usp_AddSurgeryDetails
+(
+@DoctorId int,
+@SurgeryDate date,
+@StartTime decimal(4,2),
+@EndTime decimal(4,2),
+@SurgeryCategory char(3),
+@SurgeryId int out
+)
+as
+begin
+begin try
+if not exists(select DoctorID from Doctor where DoctorID=@DoctorId)
+return -1
+if not exists(select [DoctorId],SpecializationCode from [dbo].[DoctorSpecialization]
+where [DoctorId]=@DoctorId and
+SpecializationCode=@SurgeryCategory)
+return -2
+if not exists(select StartTime from Surgery where StartTime<@StartTime)
+return -3
+if not exists(select EndTime from Surgery where EndTime>@EndTime)
+return -3
+else
+insert into Surgery values(@DoctorId,@SurgeryDate,@StartTime,@EndTime,@SurgeryCategory)
+SET @SurgeryId = IDENT_CURRENT('Surgery')
+end try
+begin catch
+return -4
+end catch
+end
+DECLARE @SurgryId INT, @ReturnValue int
+EXEC @ReturnValue = usp_AddSurgeryDetails 1001,'2020-01-01',10.00,12.00,'ANE',@SurgryId
+OUT
+SELECT @ReturnValue AS ReturnValue, @SurgryId AS SurgeryId
+select * from Surgery
+--2)Procedure 2 Answer
+create procedure usp_AddDoctorDetails
+(
+@DoctorName varchar(25),
+@SpecializationCode char(3),
+@SpecializationName varchar(20)
+)
+as
+begin
+begin try
+declare @newDoctorId int
+if not exists(Select [SpecializationCode] from [dbo].[Specialization] where
+[SpecializationCode]=@SpecializationCode)
+insert into Specialization values(@SpecializationCode,@SpecializationName)
+insert into Doctor values(@DoctorName)
+set @newDoctorId=IDENT_CURRENT('Doctor')
+insert into DoctorSpecialization values(@newDoctorId,@SpecializationCode,GETDATE())
+return 1
+end try
+begin catch
+return -1
+end catch
+end
+DECLARE @ReturnValue INT
+EXEC @ReturnValue = usp_AddDoctorDetails 'DR.ABRHAM','LOC','Specialist'
+SELECT @ReturnValue AS ReturnValue
+select * from DoctorSpecialization
+select * from Specialization
+--3)Function 1 Answer
+create function ufn_fetchSurveryDetails(
+)
+returns table
+as
+return
+(select
+d.[DoctorName],s.[SpecializationName],sg.[SurgeryDate],sg.[StartTime],sg.[EndTime]
+from [dbo].[Doctor] d,[dbo].[Specialization] s,[dbo].[Surgery] sg
+where d.[DoctorID]=sg.[DoctorId] and s.SpecializationCode=sg.[SurgeryCategory] and
+sg.[SurgeryDate]<GETDATE())
+select * from dbo.ufn_fetchSurveryDetails()
+--4)Function 2 Answer
+alter function ufn_fetchSurgeryDetails(
+@SpecializationName varchar(20),
+@SurgeryDate date
+)
+returns int
+begin
+declare @result int
+select @result=COUNT([SurgeryId]) from Surgery sg,[dbo].[Specialization] s
+where s.[SpecializationCode]=sg.[SurgeryCategory] and
+SpecializationName=@SpecializationName and SurgeryDate=@SurgeryDate
+return @result
+end
+select dbo.ufn_fetchSurgeryDetails('Anesthesiologiest','2011-01-01')
+select * from Surgery
+select * from Specialization
